@@ -1,0 +1,120 @@
+:root {
+  color: #ffffff;
+  background: #150f23;
+  font-family: 'Rubik', system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  --bg: #150f23;
+  --panel: rgba(255, 255, 255, 0.09);
+  --panel-strong: rgba(255, 255, 255, 0.14);
+  --border: rgba(194, 239, 78, 0.18);
+  --text-muted: #c9c2d8;
+  --accent: #c2ef4e;
+  --purple: #6a5fc1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(106, 95, 193, 0.35), transparent 32rem),
+    radial-gradient(circle at bottom right, rgba(194, 239, 78, 0.16), transparent 28rem),
+    linear-gradient(135deg, #1f1633 0%, var(--bg) 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.dashboard-shell {
+  width: min(1180px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 48px 0;
+}
+
+.hero-card {
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  padding: clamp(28px, 5vw, 56px);
+  background: linear-gradient(135deg, var(--panel-strong), rgba(31, 22, 51, 0.72));
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px) saturate(180%);
+}
+
+.eyebrow {
+  margin: 0 0 16px;
+  color: var(--accent);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(4rem, 16vw, 11rem);
+  line-height: 0.85;
+  letter-spacing: -0.08em;
+}
+
+.hero-copy {
+  max-width: 680px;
+  margin: 28px 0 0;
+  color: var(--text-muted);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  line-height: 1.7;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 40px;
+}
+
+.metric-card {
+  min-height: 132px;
+  padding: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  background: var(--panel);
+}
+
+.metric-card span {
+  display: block;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 24px;
+  color: #ffffff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1;
+}
+
+@media (max-width: 760px) {
+  .dashboard-shell {
+    width: min(100vw - 20px, 1180px);
+    padding: 24px 0;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}

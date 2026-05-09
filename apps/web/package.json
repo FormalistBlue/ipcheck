@@ -1,0 +1,28 @@
+{
+  "name": "web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5174",
+    "build": "vue-tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "vue-tsc -p tsconfig.json --noEmit",
+    "lint": "vue-tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview --host 127.0.0.1 --port 4174",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@ipcheck/shared": "workspace:*",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "echarts": "^6.0.0",
+    "pinia": "^3.0.4",
+    "vite": "^7.2.4",
+    "vue": "^3.5.25",
+    "vue-echarts": "^8.0.1",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.1.8"
+  }
+}

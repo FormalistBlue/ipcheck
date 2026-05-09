@@ -20,6 +20,17 @@ ipcheck reads OpenResty access logs, extracts successful WebSocket connections, 
 - Local API port: `127.0.0.1:8788`
 - Access protection: 1Panel/OpenResty reverse proxy password before public use
 
+## Development
+
+```bash
+pnpm install
+pnpm dev
+pnpm build
+pnpm typecheck
+```
+
+API development server defaults to `127.0.0.1:8788`.
+
 ## Documents
 
 - `产品设计文档.md`

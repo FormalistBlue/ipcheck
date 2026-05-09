@@ -9,6 +9,7 @@ coverage/
 *.sqlite
 *.sqlite3
 *.db
+*.tsbuildinfo
 data/
 .tmp/
 .cache/
