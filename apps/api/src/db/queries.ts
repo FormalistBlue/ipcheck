@@ -71,17 +71,25 @@ export function getLatestSnapshotForWindow(db: Db, windowMinutes: number): Snaps
   return row ? hydrateSnapshot(db, row) : null;
 }
 
-export function listRecentSnapshots(db: Db, limit: number): SnapshotListItem[] {
-  const rows = db
-    .prepare('SELECT * FROM snapshots ORDER BY created_at DESC, id DESC LIMIT ?')
-    .all(limit) as SnapshotRow[];
+export function listRecentSnapshots(db: Db, limit: number, windowMinutes?: number): SnapshotListItem[] {
+  const rows = windowMinutes
+    ? (db
+        .prepare('SELECT * FROM snapshots WHERE window_minutes = ? ORDER BY created_at DESC, id DESC LIMIT ?')
+        .all(windowMinutes, limit) as SnapshotRow[])
+    : (db
+        .prepare('SELECT * FROM snapshots ORDER BY created_at DESC, id DESC LIMIT ?')
+        .all(limit) as SnapshotRow[]);
   return rows.map((row) => hydrateSnapshot(db, row));
 }
 
-export function listSnapshotsForWindow(db: Db, windowMinutes: number): SnapshotListItem[] {
-  const rows = db
-    .prepare('SELECT * FROM snapshots WHERE window_minutes = ? ORDER BY created_at ASC, id ASC')
-    .all(windowMinutes) as SnapshotRow[];
+export function listSnapshotsForWindow(db: Db, windowMinutes: number, sinceIso?: string): SnapshotListItem[] {
+  const rows = sinceIso
+    ? (db
+        .prepare('SELECT * FROM snapshots WHERE window_minutes = ? AND created_at >= ? ORDER BY created_at ASC, id ASC')
+        .all(windowMinutes, sinceIso) as SnapshotRow[])
+    : (db
+        .prepare('SELECT * FROM snapshots WHERE window_minutes = ? ORDER BY created_at ASC, id ASC')
+        .all(windowMinutes) as SnapshotRow[]);
   return rows.map((row) => hydrateSnapshot(db, row));
 }
 

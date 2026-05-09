@@ -1,4 +1,4 @@
-import type { EntryName, RangeValue, SummaryResponse } from '@ipcheck/shared';
+import type { EntryName, RangeValue, SummaryResponse, TopIpItem } from '@ipcheck/shared';
 
 export interface TimeSeriesItem {
   timestamp: string;
@@ -16,6 +16,7 @@ export interface SnapshotItem {
   status: 'ok' | 'warning' | 'error';
   message: string;
   entries: Record<EntryName, number>;
+  topIps: TopIpItem[];
 }
 
 export interface RunItem {
@@ -40,7 +41,7 @@ export async function fetchDashboardData(range: RangeValue, fetcher: typeof fetc
   const [summary, timeseries, snapshots, runs] = await Promise.all([
     getJson<SummaryResponse>(`/api/summary?range=${range}`, fetcher),
     getJson<{ items: TimeSeriesItem[] }>(`/api/timeseries?range=${range}&bucket=${bucketForRange(range)}`, fetcher),
-    getJson<{ items: SnapshotItem[] }>('/api/snapshots/recent?limit=20', fetcher),
+    getJson<{ items: SnapshotItem[] }>(`/api/snapshots/recent?range=${range}&limit=20`, fetcher),
     getJson<{ items: RunItem[] }>('/api/runs/recent?limit=20', fetcher),
   ]);
 

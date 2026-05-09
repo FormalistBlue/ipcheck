@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { BarChart, HeatmapChart, LineChart, PieChart } from 'echarts/charts';
+import { GridComponent, LegendComponent, TitleComponent, TooltipComponent, VisualMapComponent } from 'echarts/components';
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import type { EChartsOption } from 'echarts';
+import VChart from 'vue-echarts';
 import { RANGE_VALUES, type EntryName, type RangeValue, type SummaryResponse } from '@ipcheck/shared';
 import { fetchDashboardData, type DashboardData, type TimeSeriesItem } from './api';
+
+use([BarChart, HeatmapChart, LineChart, PieChart, GridComponent, LegendComponent, TitleComponent, TooltipComponent, VisualMapComponent, CanvasRenderer]);
 
 const ENTRY_NAMES: EntryName[] = ['ws', 'ws1', 'ws2', 'ws3'];
 const ENTRY_LABELS: Record<EntryName, string> = {
@@ -25,14 +33,30 @@ const errorMessage = ref('');
 const lastRefreshedAt = ref('');
 let refreshTimer: number | undefined;
 
+const chartAxisLabel = {
+  color: '#9086aa',
+  fontFamily: 'JetBrains Mono, ui-monospace, monospace',
+};
+const chartTextStyle = {
+  color: '#c9c2d8',
+  fontFamily: 'Rubik, system-ui, sans-serif',
+};
+const chartGridLine = {
+  color: 'rgba(255, 255, 255, 0.08)',
+};
+
 const summary = computed<SummaryResponse | null>(() => data.value?.summary ?? null);
 const hasData = computed(() => Boolean(summary.value && (summary.value.totalConnections > 0 || data.value?.timeseries.length)));
 const latestSnapshot = computed(() => data.value?.snapshots[0] ?? null);
-const chartMax = computed(() => Math.max(1, ...(data.value?.timeseries.map((item) => item.totalConnections) ?? [0])));
-const entryTotal = computed(() => Math.max(1, ...(summary.value?.entries.map((entry) => entry.connectionCount) ?? [0])));
 const totalEntryConnections = computed(() => summary.value?.entries.reduce((total, entry) => total + entry.connectionCount, 0) ?? 0);
 const heatmapCells = computed(() => buildHeatmap(data.value?.timeseries ?? []));
 const topRuns = computed(() => data.value?.runs.slice(0, 8) ?? []);
+const totalTrendOption = computed<EChartsOption>(() => buildTotalTrendOption(data.value?.timeseries ?? []));
+const entryTrendOption = computed<EChartsOption>(() => buildEntryTrendOption(data.value?.timeseries ?? []));
+const entryShareOption = computed<EChartsOption>(() => buildEntryShareOption(summary.value));
+const entryCompareOption = computed<EChartsOption>(() => buildEntryCompareOption(summary.value));
+const topIpOption = computed<EChartsOption>(() => buildTopIpOption(summary.value));
+const heatmapOption = computed<EChartsOption>(() => buildHeatmapOption(heatmapCells.value));
 
 onMounted(() => {
   void loadDashboard();
@@ -89,42 +113,6 @@ function totalForEntries(entries: Record<EntryName, number>) {
   return ENTRY_NAMES.reduce((total, name) => total + (entries[name] ?? 0), 0);
 }
 
-function linePoints(items: TimeSeriesItem[]) {
-  if (!items.length) return '';
-  const width = 640;
-  const height = 180;
-  const max = Math.max(1, ...items.map((item) => item.totalConnections));
-  return items
-    .map((item, index) => {
-      const x = items.length === 1 ? width : (index / (items.length - 1)) * width;
-      const y = height - (item.totalConnections / max) * height;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
-function entryLinePoints(items: TimeSeriesItem[], entryName: EntryName) {
-  if (!items.length) return '';
-  const width = 640;
-  const height = 180;
-  const max = Math.max(1, ...items.flatMap((item) => ENTRY_NAMES.map((name) => item.entries[name] ?? 0)));
-  return items
-    .map((item, index) => {
-      const x = items.length === 1 ? width : (index / (items.length - 1)) * width;
-      const y = height - ((item.entries[entryName] ?? 0) / max) * height;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
-
-function donutStyle(entry: { entryName: EntryName; connectionCount: number }, index: number) {
-  const entries = summary.value?.entries ?? [];
-  const total = Math.max(1, entries.reduce((sum, item) => sum + item.connectionCount, 0));
-  const start = entries.slice(0, index).reduce((sum, item) => sum + item.connectionCount, 0) / total * 360;
-  const end = start + (entry.connectionCount / total) * 360;
-  return `${ENTRY_COLORS[entry.entryName]} ${start}deg ${end}deg`;
-}
-
 function buildHeatmap(items: TimeSeriesItem[]) {
   const max = Math.max(1, ...items.map((item) => item.totalConnections));
   return items.slice(-48).map((item) => ({
@@ -140,6 +128,253 @@ function statusText(status?: string) {
   if (status === 'error') return '异常';
   if (status === 'running') return '运行中';
   return '未知';
+}
+
+function formatShortTime(value: string) {
+  return new Date(value).toLocaleString('zh-CN', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function baseTooltip() {
+  return {
+    backgroundColor: 'rgba(21, 15, 35, 0.96)',
+    borderColor: 'rgba(194, 239, 78, 0.28)',
+    textStyle: { color: '#ffffff' },
+  };
+}
+
+function baseGrid() {
+  return {
+    top: 22,
+    right: 18,
+    bottom: 34,
+    left: 54,
+  };
+}
+
+function buildTotalTrendOption(items: TimeSeriesItem[]): EChartsOption {
+  return {
+    color: [ENTRY_COLORS.ws],
+    grid: baseGrid(),
+    tooltip: { trigger: 'axis', ...baseTooltip() },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: items.map((item) => formatShortTime(item.timestamp)),
+      axisLabel: chartAxisLabel,
+      axisLine: { lineStyle: chartGridLine },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: chartAxisLabel,
+      splitLine: { lineStyle: chartGridLine },
+    },
+    series: [
+      {
+        name: 'connections',
+        type: 'line',
+        smooth: true,
+        symbolSize: 7,
+        data: items.map((item) => item.totalConnections),
+        lineStyle: { width: 4 },
+        areaStyle: { opacity: 0.16 },
+      },
+    ],
+  };
+}
+
+function buildEntryTrendOption(items: TimeSeriesItem[]): EChartsOption {
+  return {
+    color: ENTRY_NAMES.map((name) => ENTRY_COLORS[name]),
+    grid: baseGrid(),
+    legend: {
+      top: 0,
+      right: 0,
+      textStyle: chartTextStyle,
+    },
+    tooltip: { trigger: 'axis', ...baseTooltip() },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: items.map((item) => formatShortTime(item.timestamp)),
+      axisLabel: chartAxisLabel,
+      axisLine: { lineStyle: chartGridLine },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: chartAxisLabel,
+      splitLine: { lineStyle: chartGridLine },
+    },
+    series: ENTRY_NAMES.map((name) => ({
+      name,
+      type: 'line',
+      smooth: true,
+      symbolSize: 5,
+      data: items.map((item) => item.entries[name] ?? 0),
+      lineStyle: { width: 3 },
+    })),
+  };
+}
+
+function buildEntryShareOption(current: SummaryResponse | null): EChartsOption {
+  const entries = current?.entries ?? [];
+  return {
+    color: ENTRY_NAMES.map((name) => ENTRY_COLORS[name]),
+    title: {
+      text: formatNumber(totalEntryConnections.value),
+      subtext: 'connections',
+      left: 'center',
+      top: 'center',
+      textStyle: { color: '#ffffff', fontFamily: 'JetBrains Mono, ui-monospace, monospace', fontSize: 24 },
+      subtextStyle: chartTextStyle,
+    },
+    tooltip: { trigger: 'item', ...baseTooltip() },
+    legend: {
+      bottom: 0,
+      textStyle: chartTextStyle,
+    },
+    series: [
+      {
+        name: 'entry share',
+        type: 'pie',
+        radius: ['58%', '78%'],
+        center: ['50%', '46%'],
+        avoidLabelOverlap: true,
+        label: { color: '#ffffff' },
+        data: entries.map((entry) => ({
+          name: entry.entryName,
+          value: entry.connectionCount,
+        })),
+      },
+    ],
+  };
+}
+
+function buildEntryCompareOption(current: SummaryResponse | null): EChartsOption {
+  const entries = current?.entries ?? [];
+  return {
+    color: [ENTRY_COLORS.ws],
+    grid: { top: 22, right: 18, bottom: 34, left: 42 },
+    tooltip: { trigger: 'axis', ...baseTooltip() },
+    xAxis: {
+      type: 'category',
+      data: entries.map((entry) => entry.entryName),
+      axisLabel: chartAxisLabel,
+      axisLine: { lineStyle: chartGridLine },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: chartAxisLabel,
+      splitLine: { lineStyle: chartGridLine },
+    },
+    series: [
+      {
+        name: 'connections',
+        type: 'bar',
+        barWidth: 26,
+        itemStyle: {
+          borderRadius: [8, 8, 0, 0],
+          color: (params: { dataIndex: number }) => ENTRY_COLORS[entries[params.dataIndex]?.entryName ?? 'ws'],
+        },
+        data: entries.map((entry) => entry.connectionCount),
+      },
+    ],
+  };
+}
+
+function buildTopIpOption(current: SummaryResponse | null): EChartsOption {
+  const items = current?.topIps.slice(0, 10) ?? [];
+  return {
+    color: ENTRY_NAMES.map((name) => ENTRY_COLORS[name]),
+    grid: { top: 18, right: 24, bottom: 20, left: 118 },
+    legend: {
+      top: 0,
+      right: 0,
+      textStyle: chartTextStyle,
+    },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...baseTooltip() },
+    xAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: chartAxisLabel,
+      splitLine: { lineStyle: chartGridLine },
+    },
+    yAxis: {
+      type: 'category',
+      inverse: true,
+      data: items.map((item) => item.ip),
+      axisLabel: { ...chartAxisLabel, width: 104, overflow: 'truncate' },
+      axisLine: { lineStyle: chartGridLine },
+      axisTick: { show: false },
+    },
+    series: ENTRY_NAMES.map((name) => ({
+      name,
+      type: 'bar',
+      stack: 'ip',
+      barWidth: 14,
+      data: items.map((item) => item.entryBreakdown[name] ?? 0),
+    })),
+  };
+}
+
+function buildHeatmapOption(cells: ReturnType<typeof buildHeatmap>): EChartsOption {
+  const max = Math.max(1, ...cells.map((cell) => cell.value));
+  return {
+    tooltip: {
+      position: 'top',
+      formatter: (params: unknown) => formatHeatmapTooltip(params, cells),
+      ...baseTooltip(),
+    },
+    grid: { top: 12, right: 16, bottom: 42, left: 18 },
+    xAxis: {
+      type: 'category',
+      data: cells.map((cell) => formatShortTime(cell.timestamp)),
+      axisLabel: { ...chartAxisLabel, interval: 'auto' },
+      axisLine: { show: false },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'category',
+      data: [''],
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { show: false },
+    },
+    visualMap: {
+      min: 0,
+      max,
+      show: false,
+      inRange: {
+        color: ['rgba(194, 239, 78, 0.12)', '#c2ef4e'],
+      },
+    },
+    series: [
+      {
+        name: 'activity',
+        type: 'heatmap',
+        data: cells.map((cell, index) => [index, 0, cell.value]),
+        label: { show: false },
+        itemStyle: {
+          borderRadius: 6,
+          borderWidth: 2,
+          borderColor: 'rgba(21, 15, 35, 0.9)',
+        },
+      },
+    ],
+  };
+}
+
+function formatHeatmapTooltip(params: unknown, cells: ReturnType<typeof buildHeatmap>) {
+  const payload = Array.isArray(params) ? params[0] : params;
+  const dataItem = (payload as { data?: unknown } | undefined)?.data;
+  const index = Array.isArray(dataItem) && typeof dataItem[0] === 'number' ? dataItem[0] : -1;
+  const cell = cells[index];
+  return `${formatTime(cell?.timestamp)}<br/>connections: ${formatNumber(cell?.value ?? 0)}`;
 }
 </script>
 
@@ -217,20 +452,7 @@ function statusText(status?: string) {
             </div>
             <span class="mono">{{ data.timeseries.length }} points</span>
           </div>
-          <svg viewBox="0 0 640 180" role="img" aria-label="总连接趋势折线图" class="line-chart">
-            <defs>
-              <linearGradient id="totalGradient" x1="0" x2="1" y1="0" y2="0">
-                <stop stop-color="#c2ef4e" />
-                <stop offset="1" stop-color="#6a5fc1" />
-              </linearGradient>
-            </defs>
-            <polyline :points="linePoints(data.timeseries)" fill="none" stroke="url(#totalGradient)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <div class="chart-axis">
-            <span>{{ formatTime(data.timeseries[0]?.timestamp) }}</span>
-            <span>max {{ formatNumber(chartMax) }}</span>
-            <span>{{ formatTime(data.timeseries.at(-1)?.timestamp) }}</span>
-          </div>
+          <VChart class="echart" :option="totalTrendOption" autoresize />
         </article>
 
         <article class="panel chart-panel wide">
@@ -240,12 +462,7 @@ function statusText(status?: string) {
               <h2>分入口趋势</h2>
             </div>
           </div>
-          <svg viewBox="0 0 640 180" role="img" aria-label="分入口趋势折线图" class="line-chart">
-            <polyline v-for="name in ENTRY_NAMES" :key="name" :points="entryLinePoints(data.timeseries, name)" fill="none" :stroke="ENTRY_COLORS[name]" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <div class="legend-row">
-            <span v-for="name in ENTRY_NAMES" :key="name"><i :style="{ background: ENTRY_COLORS[name] }" />{{ name }}</span>
-          </div>
+          <VChart class="echart" :option="entryTrendOption" autoresize />
         </article>
 
         <article class="panel">
@@ -255,9 +472,7 @@ function statusText(status?: string) {
               <h2>入口分布</h2>
             </div>
           </div>
-          <div class="donut" :style="{ background: `conic-gradient(${summary.entries.map(donutStyle).join(', ')})` }">
-            <div><strong>{{ formatNumber(totalEntryConnections) }}</strong><span>connections</span></div>
-          </div>
+          <VChart class="echart compact" :option="entryShareOption" autoresize />
           <div class="entry-list">
             <div v-for="entry in summary.entries" :key="entry.entryName">
               <span><i :style="{ background: ENTRY_COLORS[entry.entryName] }" />{{ ENTRY_LABELS[entry.entryName] }}</span>
@@ -273,13 +488,7 @@ function statusText(status?: string) {
               <h2>入口对比</h2>
             </div>
           </div>
-          <div class="bar-list">
-            <div v-for="entry in summary.entries" :key="entry.entryName" class="bar-item">
-              <span>{{ entry.entryName }}</span>
-              <div><i :style="{ width: `${Math.max(4, (entry.connectionCount / entryTotal) * 100)}%`, background: ENTRY_COLORS[entry.entryName] }" /></div>
-              <strong>{{ formatNumber(entry.connectionCount) }}</strong>
-            </div>
-          </div>
+          <VChart class="echart compact" :option="entryCompareOption" autoresize />
         </article>
 
         <article class="panel wide">
@@ -289,7 +498,8 @@ function statusText(status?: string) {
               <h2>高频来源排行</h2>
             </div>
           </div>
-          <div class="top-ip-list">
+          <VChart class="echart top-chart" :option="topIpOption" autoresize />
+          <div class="top-ip-list compact-list">
             <div v-for="item in summary.topIps.slice(0, 10)" :key="item.ip" class="top-ip-row">
               <span class="rank">#{{ item.rank }}</span>
               <strong>{{ item.ip }}</strong>
@@ -309,14 +519,7 @@ function statusText(status?: string) {
             </div>
             <span class="mono">last {{ heatmapCells.length }} buckets</span>
           </div>
-          <div class="heatmap-grid">
-            <span
-              v-for="cell in heatmapCells"
-              :key="cell.timestamp"
-              :title="`${formatTime(cell.timestamp)}: ${formatNumber(cell.value)}`"
-              :style="{ opacity: cell.intensity, background: '#c2ef4e' }"
-            />
-          </div>
+          <VChart class="echart heatmap-chart" :option="heatmapOption" autoresize />
         </article>
 
         <article class="panel">

@@ -264,6 +264,26 @@ h2 {
   background-size: 48px 45px;
 }
 
+.echart {
+  width: 100%;
+  height: 260px;
+  min-height: 220px;
+}
+
+.echart.compact {
+  height: 250px;
+  min-height: 230px;
+}
+
+.echart.top-chart {
+  height: 320px;
+}
+
+.echart.heatmap-chart {
+  height: 180px;
+  min-height: 160px;
+}
+
 .chart-axis,
 .legend-row,
 .entry-list div,
@@ -389,6 +409,10 @@ h2 {
 .timeline-list {
   display: grid;
   gap: 10px;
+}
+
+.compact-list {
+  margin-top: 10px;
 }
 
 .top-ip-row {
@@ -622,5 +646,17 @@ h2 {
 
   .heatmap-grid {
     grid-template-columns: repeat(8, 1fr);
+  }
+
+  .echart {
+    height: 230px;
+  }
+
+  .echart.top-chart {
+    height: 300px;
+  }
+
+  .echart.heatmap-chart {
+    height: 170px;
   }
 }

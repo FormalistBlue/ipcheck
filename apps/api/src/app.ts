@@ -1,6 +1,10 @@
 import cors from '@fastify/cors';
+import fastifyStatic from '@fastify/static';
 import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { RANGE_VALUES, type EntryName, type RangeValue, type SummaryResponse } from '@ipcheck/shared';
 import { createDatabase, type Db } from './db/index.js';
 import {
@@ -14,11 +18,13 @@ import {
 
 const DEFAULT_DB_PATH = '/var/lib/ipcheck/ipcheck.db';
 const BUCKET_VALUES = ['10m', '1h', '1d'] as const;
+const DEFAULT_STATIC_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../web/dist');
 
 type BucketValue = (typeof BUCKET_VALUES)[number];
 
 export interface BuildAppOptions {
   db?: Db;
+  staticRoot?: string | false;
 }
 
 export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
@@ -91,13 +97,18 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
   });
 
   app.get('/api/snapshots/recent', async (request, reply) => {
-    const limit = parseBoundedInt((request.query as { limit?: string }).limit, 20, 1, 100);
+    const query = request.query as { limit?: string; range?: string };
+    const limit = parseBoundedInt(query.limit, 20, 1, 100);
+    const range = query.range ? parseRange(query.range) : null;
     if (!limit) {
       return sendBadRequest(reply, 'INVALID_LIMIT', 'limit must be between 1 and 100');
     }
+    if (query.range && !range) {
+      return sendBadRequest(reply, 'INVALID_RANGE', 'range must be one of 30m, 24h, 7d, 30d, 90d');
+    }
 
     return {
-      items: listRecentSnapshots(db, limit),
+      items: listRecentSnapshots(db, limit, range ? windowMinutesForRange(range) : undefined),
     };
   });
 
@@ -112,10 +123,15 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
       return sendBadRequest(reply, 'INVALID_BUCKET', 'bucket must be one of 10m, 1h, 1d');
     }
 
+    const windowMinutes = windowMinutesForRange(range);
+    const latest = getLatestSnapshotForWindow(db, windowMinutes);
+    const since = latest ? sinceIso(latest.createdAt, windowMinutes) : undefined;
+    const snapshots = bucketSnapshots(listSnapshotsForWindow(db, windowMinutes, since), bucketMinutesForBucket(bucket));
+
     return {
       range,
       bucket,
-      items: listSnapshotsForWindow(db, windowMinutesForRange(range)).map((snapshot) => ({
+      items: snapshots.map((snapshot) => ({
         timestamp: snapshot.createdAt,
         totalConnections: snapshot.totalConnections,
         uniqueIps: snapshot.uniqueIps,
@@ -133,6 +149,8 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     return { items: listRecentRuns(db, limit) };
   });
 
+  registerStaticFrontend(app, options.staticRoot);
+
   return app;
 }
 
@@ -142,6 +160,32 @@ function parseRange(value: string): RangeValue | null {
 
 function parseBucket(value: string): BucketValue | null {
   return BUCKET_VALUES.includes(value as BucketValue) ? (value as BucketValue) : null;
+}
+
+function bucketMinutesForBucket(bucket: BucketValue): number {
+  const buckets: Record<BucketValue, number> = {
+    '10m': 10,
+    '1h': 60,
+    '1d': 1440,
+  };
+  return buckets[bucket];
+}
+
+function bucketSnapshots<T extends { createdAt: string }>(snapshots: T[], bucketMinutes: number): T[] {
+  if (bucketMinutes <= 10) {
+    return snapshots;
+  }
+
+  const buckets = new Map<number, T>();
+  for (const snapshot of snapshots) {
+    const bucketStart = Math.floor(new Date(snapshot.createdAt).getTime() / (bucketMinutes * 60_000));
+    buckets.set(bucketStart, snapshot);
+  }
+  return [...buckets.entries()].sort(([a], [b]) => a - b).map(([, snapshot]) => snapshot);
+}
+
+function sinceIso(latestIso: string, windowMinutes: number): string {
+  return new Date(new Date(latestIso).getTime() - windowMinutes * 60_000).toISOString();
 }
 
 function parseLimit(value: string | undefined, defaultValue: number, allowed: number[]): number | null {
@@ -166,4 +210,35 @@ function entriesArray(entries?: Record<EntryName, number>) {
 
 function sendBadRequest(reply: { code: (statusCode: number) => { send: (payload: unknown) => void } }, error: string, message: string) {
   return reply.code(400).send({ error, message });
+}
+
+function registerStaticFrontend(app: FastifyInstance, configuredRoot?: string | false): void {
+  if (configuredRoot === false) {
+    return;
+  }
+
+  const staticRoot = configuredRoot ?? process.env.IPCHECK_WEB_DIST ?? DEFAULT_STATIC_ROOT;
+  if (!existsSync(staticRoot)) {
+    app.log.warn({ staticRoot }, 'frontend dist directory not found; static serving disabled');
+    return;
+  }
+
+  app.register(fastifyStatic, {
+    root: staticRoot,
+    prefix: '/',
+    index: ['index.html'],
+    maxAge: '1h',
+  });
+
+  app.setNotFoundHandler((request, reply) => {
+    if ((request.method === 'GET' || request.method === 'HEAD') && !request.url.startsWith('/api/')) {
+      return reply.type('text/html; charset=utf-8').sendFile('index.html');
+    }
+
+    return reply.code(404).send({
+      message: `Route ${request.method}:${request.url} not found`,
+      error: 'Not Found',
+      statusCode: 404,
+    });
+  });
 }

@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { createDatabase, insertSnapshot } from './db/index.js';
 import { insertCollectionRun } from './db/collectionRuns.js';
@@ -79,7 +82,7 @@ function seedSnapshot(db = createDatabase(':memory:')) {
 
 test('GET /api/summary returns latest snapshot for requested range', async () => {
   const db = seedSnapshot();
-  const app = buildApp({ db });
+  const app = buildApp({ db, staticRoot: false });
 
   const response = await app.inject('/api/summary?range=7d');
   const body = response.json();
@@ -98,7 +101,7 @@ test('GET /api/summary returns latest snapshot for requested range', async () =>
 
 test('GET /api/top-ips, entries, snapshots, and timeseries expose dashboard data', async () => {
   const db = seedSnapshot();
-  const app = buildApp({ db });
+  const app = buildApp({ db, staticRoot: false });
 
   const topIpsResponse = await app.inject('/api/top-ips?range=7d&limit=10');
   assert.equal(topIpsResponse.statusCode, 200);
@@ -122,9 +125,55 @@ test('GET /api/top-ips, entries, snapshots, and timeseries expose dashboard data
   db.close();
 });
 
+test('GET /api/snapshots/recent can be scoped to a single range', async () => {
+  const db = seedSnapshot();
+  const createdAt = '2026-05-09T04:20:00.000Z';
+
+  for (const windowMinutes of [30, 1440, 43200]) {
+    insertSnapshot(db, {
+      createdAt,
+      windowMinutes,
+      totalConnections: windowMinutes,
+      uniqueIps: 1,
+      status: 'ok',
+      message: `OK ${windowMinutes}`,
+      rawSummary: {},
+      entries: [],
+      topIps: [],
+    });
+  }
+
+  const app = buildApp({ db, staticRoot: false });
+  const response = await app.inject('/api/snapshots/recent?range=7d&limit=20');
+  const body = response.json();
+
+  assert.equal(response.statusCode, 200);
+  assert.ok(body.items.length > 0);
+  assert.ok(body.items.every((item: { windowMinutes: number }) => item.windowMinutes === 10080));
+
+  await app.close();
+  db.close();
+});
+
+test('GET /api/timeseries buckets rolling snapshots by keeping latest point per bucket', async () => {
+  const db = seedSnapshot();
+  const app = buildApp({ db, staticRoot: false });
+
+  const response = await app.inject('/api/timeseries?range=7d&bucket=1h');
+  const body = response.json();
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].timestamp, '2026-05-09T04:10:00.000Z');
+  assert.equal(body.items[0].totalConnections, 50);
+
+  await app.close();
+  db.close();
+});
+
 test('API rejects invalid range parameters with readable errors', async () => {
   const db = seedSnapshot();
-  const app = buildApp({ db });
+  const app = buildApp({ db, staticRoot: false });
 
   const response = await app.inject('/api/summary?range=bad');
   const body = response.json();
@@ -134,4 +183,35 @@ test('API rejects invalid range parameters with readable errors', async () => {
 
   await app.close();
   db.close();
+});
+
+test('serves built frontend and keeps API routes available', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'ipcheck-static-'));
+  const db = createDatabase(':memory:');
+
+  try {
+    await writeFile(join(dir, 'index.html'), '<!doctype html><title>ipcheck</title><div id="app"></div>');
+    const app = buildApp({ db, staticRoot: dir });
+
+    const home = await app.inject('/');
+    assert.equal(home.statusCode, 200);
+    assert.match(home.headers['content-type'] as string, /text\/html/);
+    assert.match(home.body, /ipcheck/);
+
+    const fallback = await app.inject('/dashboard/history');
+    assert.equal(fallback.statusCode, 200);
+    assert.match(fallback.body, /ipcheck/);
+
+    const fallbackHead = await app.inject({ method: 'HEAD', url: '/dashboard/history' });
+    assert.equal(fallbackHead.statusCode, 200);
+
+    const health = await app.inject('/api/health');
+    assert.equal(health.statusCode, 200);
+    assert.equal(health.json().service, 'ipcheck-api');
+
+    await app.close();
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
+  }
 });
