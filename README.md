@@ -16,7 +16,7 @@ ipcheck reads OpenResty access logs, extracts successful WebSocket connections, 
 ## Target Deployment
 
 - Project path: `/home/ubuntu/personal/workSpace/ipcheck`
-- Domain: `https://xc.shandawang.cc`
+- Domain: `https://ipcheck.shandawang.cc`
 - Local API port: `127.0.0.1:8788`
 - Access protection: 1Panel/OpenResty reverse proxy password before public use
 

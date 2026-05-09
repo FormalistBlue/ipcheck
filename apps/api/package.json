@@ -10,15 +10,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/server.js",
-    "test": "node --test dist/**/*.test.js"
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
     "@fastify/static": "^8.3.0",
     "@ipcheck/shared": "workspace:*",
+    "better-sqlite3": "^12.9.0",
     "fastify": "^5.6.2"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
