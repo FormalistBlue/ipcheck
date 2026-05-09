@@ -13,6 +13,7 @@ export interface TopIpItem {
   ip: string;
   connectionCount: number;
   entryBreakdown: Record<EntryName, number>;
+  rank?: number;
 }
 
 export interface SummaryResponse {
