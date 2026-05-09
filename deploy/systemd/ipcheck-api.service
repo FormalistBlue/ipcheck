@@ -1,0 +1,35 @@
+[Unit]
+Description=ipcheck API dashboard service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/personal/workSpace/ipcheck/apps/api
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=8788
+Environment=IPCHECK_DB_PATH=/var/lib/ipcheck/ipcheck.db
+Environment=IPCHECK_WEB_DIST=/home/ubuntu/personal/workSpace/ipcheck/apps/web/dist
+ExecStart=/home/ubuntu/.nvm/versions/node/v24.14.1/bin/node dist/server.js
+Restart=on-failure
+RestartSec=5
+User=ubuntu
+Group=ubuntu
+ReadWritePaths=/var/lib/ipcheck
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
