@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
     "start": "node dist/server.js",
+    "collect": "tsx src/collect.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
