@@ -24,13 +24,13 @@ function seedSnapshot(db = createDatabase(':memory:')) {
     ],
     topIps: [
       {
-        ip: '221.237.156.241',
+        ip: '198.51.100.10',
         connectionCount: 35,
         entryBreakdown: { ws: 25, ws1: 10, ws2: 0, ws3: 0 },
         rank: 1,
       },
       {
-        ip: '171.213.246.90',
+        ip: '198.51.100.11',
         connectionCount: 7,
         entryBreakdown: { ws: 5, ws1: 2, ws2: 0, ws3: 0 },
         rank: 2,
@@ -54,13 +54,13 @@ function seedSnapshot(db = createDatabase(':memory:')) {
     ],
     topIps: [
       {
-        ip: '221.237.156.241',
+        ip: '198.51.100.10',
         connectionCount: 40,
         entryBreakdown: { ws: 28, ws1: 12, ws2: 0, ws3: 0 },
         rank: 1,
       },
       {
-        ip: '171.213.246.90',
+        ip: '198.51.100.11',
         connectionCount: 10,
         entryBreakdown: { ws: 7, ws1: 3, ws2: 0, ws3: 0 },
         rank: 2,
@@ -93,7 +93,7 @@ test('GET /api/summary returns latest snapshot for requested range', async () =>
   assert.equal(body.uniqueIps, 3);
   assert.equal(body.sevenDayTotalConnections, 50);
   assert.equal(body.entries[0].entryName, 'ws');
-  assert.equal(body.topIps[0].ip, '221.237.156.241');
+  assert.equal(body.topIps[0].ip, '198.51.100.10');
 
   await app.close();
   db.close();

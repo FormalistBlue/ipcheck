@@ -30,7 +30,7 @@ test('database initializes required tables and returns latest snapshot with entr
       ],
       topIps: [
         {
-          ip: '221.237.156.241',
+          ip: '198.51.100.10',
           connectionCount: 20,
           entryBreakdown: { ws: 18, ws1: 2, ws2: 0, ws3: 0 },
           rank: 1,
@@ -43,7 +43,7 @@ test('database initializes required tables and returns latest snapshot with entr
     const latest = getLatestSnapshot(db);
     assert.equal(latest?.totalConnections, 42);
     assert.equal(latest?.entries.length, 2);
-    assert.equal(latest?.topIps[0]?.ip, '221.237.156.241');
+    assert.equal(latest?.topIps[0]?.ip, '198.51.100.10');
     assert.deepEqual(latest?.rawSummary, { source: 'test' });
 
     db.close();

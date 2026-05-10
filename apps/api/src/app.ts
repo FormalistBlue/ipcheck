@@ -33,9 +33,12 @@ export function buildApp(options: BuildAppOptions = {}): FastifyInstance {
     logger: true,
   });
 
-  app.register(cors, {
-    origin: true,
-  });
+  const corsOrigins = parseCorsOrigins(process.env.IPCHECK_CORS_ORIGIN);
+  if (corsOrigins) {
+    app.register(cors, {
+      origin: corsOrigins,
+    });
+  }
 
   app.get('/api/health', async () => ({
     status: 'ok',
@@ -160,6 +163,23 @@ function parseRange(value: string): RangeValue | null {
 
 function parseBucket(value: string): BucketValue | null {
   return BUCKET_VALUES.includes(value as BucketValue) ? (value as BucketValue) : null;
+}
+
+function parseCorsOrigins(value: string | undefined): true | string[] | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  if (value === '*') {
+    return true;
+  }
+
+  const origins = value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return origins.length > 0 ? origins : undefined;
 }
 
 function bucketMinutesForBucket(bucket: BucketValue): number {

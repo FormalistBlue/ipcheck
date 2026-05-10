@@ -77,6 +77,7 @@ export interface CollectOptions {
   tailLines?: number;
   topLimit?: number;
   retentionDays?: number;
+  forceStatus?: 'ok' | 'warning' | 'error';
 }
 
 export function parseOpenRestyAccessLine(entryName: EntryName, line: string): ParsedAccessEvent | null {
@@ -117,9 +118,14 @@ export function summarizeEvents(
   windowMinutes: number,
   nowIso: string,
   topLimit: number,
+  status: 'ok' | 'warning' | 'error' = 'ok',
 ): CollectorSnapshotSummary {
-  const cutoff = new Date(new Date(nowIso).getTime() - windowMinutes * 60_000).getTime();
-  const inWindow = events.filter((event) => new Date(event.timestamp).getTime() >= cutoff);
+  const nowMs = new Date(nowIso).getTime();
+  const cutoff = nowMs - windowMinutes * 60_000;
+  const inWindow = events.filter((event) => {
+    const timestampMs = new Date(event.timestamp).getTime();
+    return timestampMs >= cutoff && timestampMs <= nowMs;
+  });
   const entryCounts = new Map<EntryName, number>(ENTRY_NAMES.map((entry) => [entry, 0]));
   const ipCounts = new Map<string, number>();
   const ipEntryCounts = new Map<string, Map<EntryName, number>>();
@@ -157,7 +163,7 @@ export function summarizeEvents(
     windowMinutes,
     totalConnections: inWindow.length,
     uniqueIps: ipCounts.size,
-    status: 'ok',
+    status,
     message,
     rawSummary: {
       range: rangeLabel,
@@ -185,6 +191,7 @@ export async function collectOnce(db: Db, options: CollectOptions = {}): Promise
   const events: ParsedAccessEvent[] = [];
   let logsRead = 0;
   let linesScanned = 0;
+  let status: 'ok' | 'warning' | 'error' = options.forceStatus ?? 'ok';
 
   for (const log of logs) {
     try {
@@ -204,8 +211,12 @@ export async function collectOnce(db: Db, options: CollectOptions = {}): Promise
     }
   }
 
+  if (errors.length > 0 && status === 'ok') {
+    status = logsRead > 0 ? 'warning' : 'error';
+  }
+
   events.sort((a, b) => a.timestamp.localeCompare(b.timestamp));
-  const snapshots = windows.map((windowMinutes) => summarizeEvents(events, windowMinutes, now, topLimit));
+  const snapshots = windows.map((windowMinutes) => summarizeEvents(events, windowMinutes, now, topLimit, status));
   const finishedAt = new Date().toISOString();
 
   if (!dryRun) {
